@@ -1,0 +1,22 @@
+{
+    "ts-node": {
+      "require": [
+        "tsconfig-paths/register"
+      ]
+    },
+    "compilerOptions": {
+      "target": "ESNext",
+      "module": "CommonJS",
+      "lib": [
+        "ESNext"
+      ],
+      "moduleResolution": "node",
+      "allowSyntheticDefaultImports": true,
+      "experimentalDecorators": true,
+      "emitDecoratorMetadata": true,
+      "resolveJsonModule": true,
+      "paths": {
+        "~*": ["./src/*"],
+      }
+    }
+  }
