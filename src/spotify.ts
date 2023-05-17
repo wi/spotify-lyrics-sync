@@ -6,9 +6,8 @@ interface PlaybackState {
     trackName?: string,
     trackId?: string,
     oldTrackId?: string,
-    trackDuration: 0,
-    trackProgress: 0,
-    lyrics: Array<any>,
+    trackDuration: number,
+    lyrics: Array<Line>,
     currentLyrics: null,
     hasLyrics: false,
 }
@@ -35,6 +34,7 @@ interface Player {
     is_playing?: boolean,
     progress_ms?: number,
     item?: Track,
+    error?: string
 }
 
 interface WebPlayerResponse {
@@ -56,6 +56,7 @@ export interface Line {
 export class spotify {
     playbackState: PlaybackState;
     event: EventEmitter;
+    emitLyric: boolean;
     private token: string;
     private refreshToken?: string;
     private clientId: string;
@@ -63,7 +64,7 @@ export class spotify {
     private lastRefresh: Date;
     private cookie: string;
 
-    constructor(clientId: string, clientSecret: string, cookie?: string,token?: string, refreshtoken?: string) {
+    constructor(clientId: string, clientSecret: string, cookie?: string, token?: string, refreshtoken?: string) {
         if(!token) {
             // Get token from .env file
             require('dotenv').config();
@@ -82,7 +83,12 @@ export class spotify {
         this.lastRefresh = new Date();
         this.playbackState = {} as PlaybackState; 
         this.cookie = cookie;
+        this.emitLyric = false
         this.tokenRefresh()
+    }
+
+    on(event: string, listener: (...args: any[]) => void) {
+        this.event.on(event, listener);
     }
 
     private makePostRequest(url: string, config: AxiosRequestConfig<any>) {
@@ -112,7 +118,12 @@ export class spotify {
                 if (error.response.status == 403) { 
                     return resolve({lines: []})
                 }
-                reject(error)
+                if (error.response.status == 401) {
+                    //this.tokenRefresh().then(done => {
+                    //    return resolve(this.makeGetRequest(url, config))
+                    //})
+                    return resolve({error: "Token expired"})
+                }
             });
         })
         
@@ -136,10 +147,22 @@ export class spotify {
       }
 
     update() {
+        if(!this.emitLyric) {
+            console.log("Not emitting lyrics")
+            return;
+        }
+
         this.getPlayer().then((data) => {
             const d = data as Player;
+            if(d.error) {
+                console.log("Error getting player data.. Waiting 5 seconds and retrying")
+                return setTimeout(() => {
+                    this.update();
+                }, 5000);
+            }
             if(!d.is_playing) {
                 console.log("Not playing.. Waiting 5 seconds and retrying")
+                this.event.emit('musicStop');
                 return setTimeout(() => {
                     this.update();
                 }, 5000);
@@ -148,8 +171,7 @@ export class spotify {
                 this.playbackState.oldTrackId = this.playbackState.trackId;
                 this.playbackState.trackId = d?.item?.id;
                 this.playbackState.trackName = d?.item?.name;
-                this.playbackState.trackDuration = 0;
-                this.playbackState.trackProgress = 0;
+                this.playbackState.trackDuration = d?.item?.duration_ms;
                 this.playbackState.hasLyrics = false;
                 this.playbackState.lyrics = [];
                 this.playbackState.currentLyrics = null;
